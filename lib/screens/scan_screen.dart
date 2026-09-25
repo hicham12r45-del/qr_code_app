@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../models/qr_item.dart';
 import '../theme/app_theme.dart';
@@ -30,7 +31,11 @@ class _ScanScreenState extends State<ScanScreen> {
     if (barcodes.isEmpty) return;
     final raw = barcodes.first.rawValue;
     if (raw == null || raw.isEmpty) return;
+    _handleRawValue(raw);
+  }
 
+  void _handleRawValue(String raw) {
+    if (_handled) return;
     _handled = true;
 
     final item = QrItem(
@@ -54,6 +59,39 @@ class _ScanScreenState extends State<ScanScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return; // user cancelled
+
+      final capture = await _controller.analyzeImage(picked.path);
+      if (!mounted) return;
+
+      if (capture == null || capture.barcodes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No QR code found in that image')),
+        );
+        return;
+      }
+
+      final raw = capture.barcodes.first.rawValue;
+      if (raw == null || raw.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No QR code found in that image')),
+        );
+        return;
+      }
+
+      _handleRawValue(raw);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read that image')),
+      );
+    }
   }
 
   QrType _guessType(String raw) {
@@ -188,12 +226,7 @@ class _ScanScreenState extends State<ScanScreen> {
         _bottomAction(
           icon: Icons.image_rounded,
           label: 'Gallery',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Pick a QR image from your gallery')),
-            );
-          },
+          onTap: _pickFromGallery,
         ),
         _bottomAction(
           icon: _torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
